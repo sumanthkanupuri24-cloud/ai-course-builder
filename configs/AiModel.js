@@ -1,18 +1,11 @@
-import OpenAI from "openai";
+import Groq from "groq-sdk";
 
-let _client;
-const getClient = () => {
-  if (!_client) {
-    _client = new OpenAI({
-      apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY,
-      dangerouslyAllowBrowser: true,
-    });
-  }
-  return _client;
-};
+const groq = new Groq({
+  apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY,
+  dangerouslyAllowBrowser: true,
+});
 
-const COURSE_LAYOUT_SYSTEM_PROMPT =
-  `You are a course curriculum designer. Always respond with valid JSON only, no markdown, no explanation.
+const COURSE_LAYOUT_SYSTEM_PROMPT = `You are a course curriculum designer. Always respond with valid JSON only, no markdown, no explanation.
 The JSON must follow this exact structure:
 {
   "course": {
@@ -36,46 +29,7 @@ The JSON must follow this exact structure:
 const CHAPTER_CONTENT_SYSTEM_PROMPT =
   "You are an expert technical educator. Always respond with valid JSON only, no markdown, no explanation.";
 
-const createChatSession = (systemPrompt) => ({
-  sendMessage: async (userMessage) => {
-    console.log("[AiModel] sendMessage called");
-    console.log("[AiModel] System prompt:", systemPrompt);
-    console.log("[AiModel] User message:", userMessage);
-    console.log("[AiModel] API key present:", !!process.env.NEXT_PUBLIC_OPENAI_API_KEY);
-
-    let completion;
-    try {
-      console.log("[AiModel] Sending request to OpenAI...");
-      completion = await getClient().chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage },
-        ],
-        response_format: { type: "json_object" },
-      });
-      console.log("[AiModel] OpenAI response received");
-      console.log("[AiModel] Usage:", completion.usage);
-      console.log("[AiModel] Finish reason:", completion.choices[0]?.finish_reason);
-    } catch (err) {
-      console.error("[AiModel] OpenAI API error:", err?.message || err);
-      console.error("[AiModel] Error status:", err?.status);
-      console.error("[AiModel] Error details:", err?.error);
-      throw err;
-    }
-
-    const text = completion.choices[0].message.content;
-    console.log("[AiModel] Raw response text:", text);
-    return {
-      response: {
-        text: () => text,
-      },
-    };
-  },
-});
-
-const QUIZ_SYSTEM_PROMPT =
-  `You are a quiz generator for educational courses. Always respond with valid JSON only, no markdown, no explanation.
+const QUIZ_SYSTEM_PROMPT = `You are a quiz generator for educational courses. Always respond with valid JSON only, no markdown, no explanation.
 The JSON must follow this exact structure:
 {
   "quiz": [
@@ -88,6 +42,26 @@ The JSON must follow this exact structure:
   ]
 }
 Where correctAnswer is the 0-based index of the correct option. Generate exactly 5 questions.`;
+
+const createChatSession = (systemPrompt) => ({
+  sendMessage: async (userMessage) => {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const text = completion.choices[0].message.content;
+    return {
+      response: {
+        text: () => text,
+      },
+    };
+  },
+});
 
 export const GenerateCourseLayout_AI = createChatSession(COURSE_LAYOUT_SYSTEM_PROMPT);
 export const GenerateChapterContent_AI = createChatSession(CHAPTER_CONTENT_SYSTEM_PROMPT);
